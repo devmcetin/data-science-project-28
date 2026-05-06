@@ -198,3 +198,71 @@ def test_run_full_pipeline_values():
     assert isinstance(result["best_k"], int)
     assert len(result["sample_predictions"]) == 5
     assert len(result["sample_probabilities"]) == 5
+
+
+# ──────────────────────────────────────────────────────
+# Kaizu skor gönderimi — bu kısma DOKUNMA
+# ──────────────────────────────────────────────────────
+
+import requests
+
+
+def _send_score(user_score):
+    """Kaizu API'sine skor gönder. user_id ve project_id kaizu_config'ten gelir."""
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    try:
+        from kaizu_config import USER_ID, PROJECT_ID
+    except ImportError:
+        print("⚠️  kaizu_config.py bulunamadı — skor gönderilmeyecek.")
+        return
+
+    if USER_ID == 0:
+        print("⚠️  kaizu_config.py'de USER_ID=0 — kendi ID'ni yazmadın, skor gönderilmeyecek.")
+        return
+
+    url = "https://kaizu-api-8cd10af40cb3.herokuapp.com/projectLog"
+    payload = {
+        "user_id": USER_ID,
+        "project_id": PROJECT_ID,
+        "user_score": user_score,
+        "is_auto": True,
+    }
+    try:
+        r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=10)
+        if r.status_code in (200, 201):
+            print(f"✅ Skor gönderildi: {user_score}")
+        else:
+            print(f"⚠️  Skor gönderilemedi (HTTP {r.status_code})")
+    except Exception as e:
+        print(f"⚠️  Skor gönderilirken hata: {e}")
+
+
+class _ResultCollector:
+    def __init__(self):
+        self.passed = 0
+        self.failed = 0
+
+    def pytest_runtest_logreport(self, report):
+        if report.when == "call":
+            if report.passed:
+                self.passed += 1
+            elif report.failed:
+                self.failed += 1
+
+
+def run_tests():
+    """Tüm testleri çalıştır + skoru Kaizu'ya gönder."""
+    collector = _ResultCollector()
+    pytest.main([os.path.dirname(__file__), "-q"], plugins=[collector])
+    total = collector.passed + collector.failed
+    if total == 0:
+        print("Hiç test çalışmadı.")
+        return
+    user_score = round((collector.passed / total) * 100, 2)
+    print(f"\n📊 Toplam başarılı : {collector.passed}/{total}")
+    print(f"📊 Skor            : {user_score}")
+    _send_score(user_score)
+
+
+if __name__ == "__main__":
+    run_tests()

@@ -40,6 +40,25 @@ python watch.py
 pytest tests/test_question.py -v
 ```
 
+## 🔑 Kaizu Bağlantısı — `kaizu_config.py`
+
+Skorunun Kaizu hesabına yazılması için **`kaizu_config.py`** dosyasını aç ve **`USER_ID`** alanını kendi user_id'nle değiştir:
+
+```python
+USER_ID = 0      # ← Kaizu profilinden alıp buraya yaz
+PROJECT_ID = 708 # ← Bu projeye ait, dokunma
+```
+
+User_id'ni Kaizu profilinden bulabilirsin (Profile → Settings → User ID).
+
+Skor göndermek için tüm testleri toplu çalıştırmalısın:
+
+```bash
+python tests/test_question.py
+```
+
+Bu komut tüm testleri çalıştırır, **passed/total oranını otomatik Kaizu'ya gönderir**. Geliştirme sırasında `pytest -v` kullanmaya devam edebilirsin (skor göndermez).
+
 ## 📋 Görevler (`tasks/task_manager.py`)
 
 `task_manager.py` dosyasındaki fonksiyonları sırayla doldur. Her task altta testler pass olana kadar düzenlenmeli.
@@ -102,3 +121,10 @@ Bu projeyi bitirdiğinde:
 - CV ortalama + std okumayı bilirsin (kararlı model = düşük std)
 - Hyperparameter (k) optimizasyonunu CV ile doğru yapabilirsin
 - Bir baseline ML modeli kurup performansını profesyonelce raporlayabilirsin
+
+## 🚫 Dikkat
+
+- `tests/test_question.py` dosyasını **değiştirme**
+- `random_state=42` değerini değiştirme (testler fail olur)
+- `_solution/` klasörü yok (DB'de saklanır, dersin haftası geçince açılır)
+- Dokunabileceğin **2 dosya**: `tasks/task_manager.py` (kodu yaz) + `kaizu_config.py` (sadece USER_ID)
