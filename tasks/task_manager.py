@@ -7,6 +7,14 @@ Her fonksiyonun pass kısmını doldur. Testleri çalıştır, hepsi geçene kad
 iterate et: `python watch.py` veya `pytest tests/test_question.py -v`
 """
 
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+
 
 # 1. Sentetik churn verisini yükle
 def load_churn_data():
@@ -27,7 +35,14 @@ def load_churn_data():
             'target_names': ['Stay', 'Churn']
         }
     """
-    pass
+    X, y = make_classification(n_samples=2000, n_features=5, n_informative=4, n_redundant=1, n_classes=2, weights=[0.8, 0.2], random_state=42)
+    
+    return {
+        "X": X,
+        "y": y,
+        "feature_names": ['tenure_months', 'monthly_charges', 'total_charges', 'num_services', 'support_calls'],
+        "target_names": ['Stay', 'Churn']
+    }
 
 
 # 2. Sınıf dengesini incele
@@ -44,7 +59,12 @@ def explore_class_balance(y, target_names):
 
     Not: Dengesiz veri var (%80 / %20). Bu fark stratify gerektirir!
     """
-    pass
+    counts = np.bincount(y)
+    
+    return {
+        target_names[0]: int(counts[0]),
+        target_names[1]: int(counts[1])
+    }
 
 
 # 3. Stratified train/test split
@@ -58,7 +78,9 @@ def split_data_stratified(X, y):
     Returns:
         tuple: (X_train, X_test, y_train, y_test)
     """
-    pass
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+    return (X_train, X_test, y_train, y_test)
 
 
 # 4. Pipeline kur (StandardScaler + KNN)
@@ -74,7 +96,9 @@ def build_pipeline(k=5):
     Returns:
         sklearn.pipeline.Pipeline
     """
-    pass
+    pipeline = Pipeline([("scaler", StandardScaler()), ("knn", KNeighborsClassifier(n_neighbors=k))])
+    
+    return pipeline
 
 
 # 5. Pipeline'ı eğit
@@ -85,7 +109,7 @@ def train_pipeline(pipe, X_train, y_train):
     Returns:
         sklearn.pipeline.Pipeline (fit edilmiş)
     """
-    pass
+    return pipe.fit(X_train, y_train)
 
 
 # 6. Cross-validation ile değerlendir
@@ -105,7 +129,13 @@ def evaluate_with_cv(pipe, X, y, cv=5):
             'scores': list (5 fold skoru)
         }
     """
-    pass
+    scores = cross_val_score(pipe, X, y, cv=cv)
+    
+    return {
+        "mean": float(scores.mean()),
+        "std": float(scores.std()),
+        "scores": scores.tolist()
+    }
 
 
 # 7. Overfit teşhisi
@@ -122,7 +152,12 @@ def detect_overfit(train_acc, test_acc, threshold=0.10):
     Returns:
         dict: {'overfit': bool, 'gap': float}
     """
-    pass
+    gap = float(train_acc - test_acc)
+    
+    return {
+        "overfit": gap > 0.1,
+        "gap": gap 
+    }
 
 
 # 8. En iyi k'yı bul (CV ile)
@@ -143,7 +178,22 @@ def find_best_k(X_train, y_train, k_values):
 
     İpucu: Her k için build_pipeline(k=k) ile yeni pipe kurabilirsin.
     """
-    pass
+    scores = {}
+
+    # 2. k_values listesindeki her bir k değerini döngüyle geziyoruz
+    for k in k_values:
+        pipe = build_pipeline(k=k)
+        cv_results = evaluate_with_cv(pipe, X_train, y_train)
+        scores[k] = cv_results["mean"]
+
+    best_k = int(max(scores, key=scores.get))
+    best_score = float(scores[best_k])
+
+    return {
+        "best_k": best_k,
+        "best_score": best_score,
+        "all_scores": scores,
+    }
 
 
 # 9. predict_proba ile threshold'lu tahmin
@@ -169,7 +219,10 @@ def predict_with_proba(pipe, X_new, threshold=0.5):
     İpucu: pipe.predict_proba(X_new)[:, 1] → sınıf 1 (Churn) olasılığı.
            numpy.where ile threshold'a göre 'Churn'/'Stay' ata.
     """
-    pass
+    probabilities = pipe.predict_proba(X_new)[:, 1]
+    predictions = np.where(probabilities > threshold, "Churn", "Stay")
+
+    return {"predictions": predictions, "probabilities": probabilities}
 
 
 # 10. Tüm pipeline'ı uçtan uca çalıştır
@@ -198,7 +251,52 @@ def run_full_pipeline():
             'sample_probabilities': list (5 element)
         }
     """
-    pass
+    # 1. Veriyi yükle
+    data = load_churn_data() 
+    X, y, feature_names, target_names = data["X"], data["y"], data["feature_names"], data["target_names"]
+
+    # 2. Sınıf dengesi çıkar
+    class_balance = explore_class_balance(y, target_names=target_names)
+
+    # 3. Stratified split
+    X_train, X_test, y_train, y_test = split_data_stratified(X, y)
+
+    # 4. find_best_k ile k optimizasyonu (k_values=[1,3,5,10,20,50])
+    k_values = [1, 3, 5, 10, 20, 50]
+    tuning_results = find_best_k(X_train, y_train, k_values=k_values)
+    best_k = tuning_results["best_k"]
+
+    # 5. En iyi k ile pipeline kur, eğit
+    best_pipe = build_pipeline(k=best_k)
+    best_pipe = train_pipeline(best_pipe, X_train, y_train)
+
+    # 6. CV ile değerlendir
+    pipe_for_cv = build_pipeline(k=best_k)
+    cv_results = evaluate_with_cv(pipe_for_cv, X_train, y_train, cv=5)
+
+    # 7. Train vs test → overfit kontrolü
+    train_acc = float(best_pipe.score(X_train, y_train))
+    test_acc = float(best_pipe.score(X_test, y_test))
+    overfit_check = detect_overfit(train_acc, test_acc)
+
+    # 8. İlk 5 test örneği için predict_with_proba
+    X_sample = X_test[:5]
+    proba_results = predict_with_proba(best_pipe, X_sample, threshold=0.5)
+
+    sample_predictions = proba_results["predictions"].tolist()
+    sample_probabilities = proba_results["probabilities"].tolist()
+
+    return {
+        "class_balance": class_balance,
+        "best_k": int(best_k),
+        "cv_mean": float(cv_results["mean"]),
+        "cv_std": float(cv_results["std"]),
+        "train_acc": train_acc,
+        "test_acc": test_acc,
+        "overfit_check": overfit_check,
+        "sample_predictions": sample_predictions,
+        "sample_probabilities": sample_probabilities,
+    }
 
 
 if __name__ == "__main__":
